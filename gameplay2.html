@@ -195,7 +195,7 @@ document.querySelectorAll('#controls button').forEach(button=>{
   button.addEventListener('pointercancel',stop);
   button.addEventListener('lostpointercapture',e=>release(direction));
 });
-setInterval(step,110);setInterval(estep,380);
+setInterval(estep,380);
 start();
 requestAnimationFrame(tick);
 </script>

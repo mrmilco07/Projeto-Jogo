@@ -44,14 +44,14 @@ const MAPS=[[
 "#.....#.......#",
 "###############"],[
 "###############",
-"#1...X....2...#",
-"#.X.X...X.X...#",
-"#.X...X...X.X.#",
-"#...XX...X....#",
-"P..X....X.....D",
-"#...X.XX...X..#",
-"#.3...X...4...#",
-"#....X.....5..#",
+"#1..#...#.2...#",
+"#...#.......#.#",
+"#...#...#...#.#",
+"#...#...#...#.#",
+"P.......#.....D",
+"#...#...#...#.#",
+"#.3.#...#.4.#.#",
+"#...#...#...5.#",
 "###############"]];
 const $=id=>document.getElementById(id),cv=$('c'),g=cv.getContext('2d');
 g.imageSmoothingEnabled=false;
@@ -64,7 +64,6 @@ const WALL=["mmmmmmmm","allaaaam","aaaaaaam","aaaaaaam","mmmmmmmm","aaamalla","a
 const WP={a:'#454a5c',m:'#262935',l:'#5c6278',k:'#0a0a12',u:'#9aa0b0',n:'#4a6aa8'};
 const winPts=[];for(let r=1;r<=6;r++)for(let c=2;c<=5;c++)winPts.push([r,c,(c===2||c===4)?'u':'k']);winPts.push([1,3,'n'],[1,5,'n']);
 const FL=["gggggggd","gffffffd","gffffffd","gfffgffd","gffffffd","gffffffd","gffffffd","dddddddd"];
-const CR=[];for(let r=0;r<8;r++){let s='';for(let c=0;c<8;c++)s+=(r===0||r===7||c===0||c===7||r===c||r+c===7)?'d':(r===1?'l':'o');CR.push(s)}
 function doorRows(open){const a=[];for(let r=0;r<8;r++){let s='';for(let c=0;c<8;c++){let ch;
   if(r===0||c===0||c===7)ch='d';else if(open)ch='L';else ch=(c===3)?'d':(r===2||r===5)?'i':'o';s+=ch}a.push(s)}return a}
 const DP={d:'#2a1608',o:'#7a4a22',i:'#9aa0b0',y:'#f8d838',L:'#fff6b0'};
@@ -75,7 +74,6 @@ const GA=["..wwww..",".wwwwww.","wwrwwrww","wwwwwwww","wwwddwww","wwwwwwww","www
 const SP={
   wall:mk(WALL,WP),win:mk(ed(WALL,winPts),WP),
   floorA:mk(FL,{f:'#5d6272',g:'#6c7285',d:'#434756'}),floorB:mk(FL,{f:'#565b6a',g:'#656b7d',d:'#3d414f'}),
-  crate:mk(CR,{d:'#3a2210',o:'#a8743a',l:'#c8954f'}),
   doorC:mk(ed(doorRows(false),[[3,3,'i'],[3,4,'i'],[4,3,'y'],[4,4,'y']]),DP),doorO:mk(doorRows(true),DP),
   key:mk(["..yyyy..",".yyooyy.",".yy..yy.",".yyooyy.","..yyyy..","...yy...","...yyy..","...yy.y."],{y:'#f8d838',o:'#b8861c'}),
   hA:mk(HA,HP),hB:mk(HA.slice(0,6).concat(["..bbbb..","..l..l.."]),HP),
@@ -91,7 +89,8 @@ let S={mode:'menu',i:0,sum:0,wf:0,face:1},held=[];
 function load(i){
   S.i=i;S.keys=0;S.grid=MAPS[i].map(r=>r.split(''));
   for(let y=0;y<10;y++)for(let x=0;x<15;x++)if(S.grid[y][x]==='P'){S.px=x;S.py=y;S.grid[y][x]='.'}
-  const E=[[13,8],[13,1],[13,1]][i];S.ex=E[0];S.ey=E[1];S.eg=performance.now()+1000;
+  S.ghosts=[{x:13,y:1},{x:13,y:8}];
+  S.eg=performance.now()+1000;
 }
 function start(){S.mode='play';S.wf=0;S.face=1;load(PHASE-1);S.t0=performance.now();hud();beep(523,.1);beep(784,.15,'square',.05,.1)}
 function hud(){
@@ -104,24 +103,27 @@ function over(){S.mode='over';location.href='gameover.html'}
 function caught(){beep(220,.25,'sawtooth');beep(147,.4,'sawtooth',.05,.2);over()}
 function estep(){
   if(S.mode!=='play'||performance.now()<S.eg)return;
-  const k=(x,y)=>y*15+x,q=[[S.ex,S.ey]],prev={};prev[k(S.ex,S.ey)]=null;
-  let found=false;
-  for(let h=0;h<q.length&&!found;h++){
-    const [x,y]=q[h];
-    for(const [dx,dy] of [[0,-1],[0,1],[-1,0],[1,0]]){
-      const nx=x+dx,ny=y+dy;
-      if(nx<0||ny<0||nx>14||ny>9)continue;
-      const c=S.grid[ny][nx];
-      if(c==='#'||c==='X'||c==='D'||(k(nx,ny) in prev))continue;
-      prev[k(nx,ny)]=[x,y];q.push([nx,ny]);
-      if(nx===S.px&&ny===S.py){found=true;break}
+  const k=(x,y)=>y*15+x;
+  for(const ghost of S.ghosts){
+    const q=[[ghost.x,ghost.y]],prev={};prev[k(ghost.x,ghost.y)]=null;
+    let found=false;
+    for(let h=0;h<q.length&&!found;h++){
+      const [x,y]=q[h];
+      for(const [dx,dy] of [[0,-1],[0,1],[-1,0],[1,0]]){
+        const nx=x+dx,ny=y+dy;
+        if(nx<0||ny<0||nx>14||ny>9)continue;
+        const c=S.grid[ny][nx],occupied=S.ghosts.some(other=>other!==ghost&&other.x===nx&&other.y===ny);
+        if(c==='#'||c==='D'||(occupied&&(nx!==S.px||ny!==S.py))||(k(nx,ny) in prev))continue;
+        prev[k(nx,ny)]=[x,y];q.push([nx,ny]);
+        if(nx===S.px&&ny===S.py){found=true;break}
+      }
     }
+    if(!found)continue;
+    let cur=[S.px,S.py],p=prev[k(cur[0],cur[1])];
+    while(p&&prev[k(p[0],p[1])]){cur=p;p=prev[k(p[0],p[1])]}
+    ghost.x=cur[0];ghost.y=cur[1];
+    if(ghost.x===S.px&&ghost.y===S.py){caught();return}
   }
-  if(!found)return;
-  let cur=[S.px,S.py],p=prev[k(cur[0],cur[1])];
-  while(prev[k(p[0],p[1])]){cur=p;p=prev[k(p[0],p[1])]}
-  S.ex=cur[0];S.ey=cur[1];
-  if(S.ex===S.px&&S.ey===S.py)caught();
 }
 function step(){
   if(S.mode!=='play'||!held.length)return;
@@ -129,7 +131,7 @@ function step(){
   if(dx)S.face=dx;
   if(nx<0||ny<0||nx>14||ny>9)return;
   const c=S.grid[ny][nx];
-  if(c==='#'||c==='X')return;
+  if(c==='#')return;
   if(c==='D'){
     if(S.keys<REQUIRED_KEYS[S.i]){beep(150,.15,'square');return}
     if(PHASE<3){location.href='gameplay'+(PHASE+1)+'.html';return}
@@ -139,7 +141,7 @@ function step(){
     beep(150,.15,'square');return;
   }
   S.px=nx;S.py=ny;S.wf++;
-  if(S.px===S.ex&&S.py===S.ey){caught();return}
+  if(S.ghosts.some(ghost=>S.px===ghost.x&&S.py===ghost.y)){caught();return}
   if(c>='1'&&c<='9'){S.keys++;S.grid[ny][nx]='.';beep(988,.08);beep(1318,.12,'square',.05,.08)}
   hud();
 }
@@ -161,14 +163,15 @@ function draw(){
       g.drawImage(S.keys>=REQUIRED_KEYS[S.i]?SP.doorO:SP.doorC,px,py,T,T);
     }else{
       g.drawImage((x+y)%2?SP.floorA:SP.floorB,px,py,T,T);
-      if(c==='X'){g.drawImage(SP.crate,px,py,T,T)}
-      else if(c>='1'&&c<='9'){
+      if(c>='1'&&c<='9'){
         g.drawImage(SP.key,px+1,py+1,24,24);
       }
     }
   }
   const gy=Math.sin(now/220)*3;
-  g.globalAlpha=.92;spr(fl?SP.gB:SP.gA,S.ex*T,S.ey*T-4+gy,S.px<S.ex);g.globalAlpha=1;
+  g.globalAlpha=.92;
+  S.ghosts.forEach(ghost=>spr(fl?SP.gB:SP.gA,ghost.x*T,ghost.y*T-4+gy,S.px<ghost.x));
+  g.globalAlpha=1;
   spr(S.wf%2?SP.hB:SP.hA,S.px*T,S.py*T-2,S.face<0);
 }
 function tick(){
@@ -195,7 +198,7 @@ document.querySelectorAll('#controls button').forEach(button=>{
   button.addEventListener('pointercancel',stop);
   button.addEventListener('lostpointercapture',e=>release(direction));
 });
-setInterval(step,110);setInterval(estep,380);
+setInterval(estep,380);
 start();
 requestAnimationFrame(tick);
 </script>
