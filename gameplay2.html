@@ -91,7 +91,7 @@ let S={mode:'menu',i:0,sum:0,wf:0,face:1},held=[];
 function load(i){
   S.i=i;S.keys=0;S.grid=MAPS[i].map(r=>r.split(''));
   for(let y=0;y<10;y++)for(let x=0;x<15;x++)if(S.grid[y][x]==='P'){S.px=x;S.py=y;S.grid[y][x]='.'}
-  const E=[[13,8],[13,1],[13,1]][i];S.ex=E[0];S.ey=E[1];S.eg=performance.now()+1000;
+  S.ghosts=[{x:13,y:1},{x:13,y:8}];S.eg=performance.now()+1000;
 }
 function start(){S.mode='play';S.wf=0;S.face=1;load(PHASE-1);S.t0=performance.now();hud();beep(523,.1);beep(784,.15,'square',.05,.1)}
 function hud(){
@@ -102,17 +102,17 @@ function hud(){
 }
 function over(){S.mode='over';location.href='gameover.html'}
 function caught(){beep(220,.25,'sawtooth');beep(147,.4,'sawtooth',.05,.2);over()}
-function estep(){
+function moveGhost(ghost){
   if(S.mode!=='play'||performance.now()<S.eg)return;
-  const k=(x,y)=>y*15+x,q=[[S.ex,S.ey]],prev={};prev[k(S.ex,S.ey)]=null;
+  const k=(x,y)=>y*15+x,q=[[ghost.x,ghost.y]],prev={};prev[k(ghost.x,ghost.y)]=null;
   let found=false;
   for(let h=0;h<q.length&&!found;h++){
     const [x,y]=q[h];
     for(const [dx,dy] of [[0,-1],[0,1],[-1,0],[1,0]]){
       const nx=x+dx,ny=y+dy;
       if(nx<0||ny<0||nx>14||ny>9)continue;
-      const c=S.grid[ny][nx];
-      if(c==='#'||c==='X'||c==='D'||(k(nx,ny) in prev))continue;
+      const c=S.grid[ny][nx],occupied=S.ghosts.some(other=>other!==ghost&&other.x===nx&&other.y===ny);
+      if(c==='#'||c==='X'||c==='D'||(occupied&&(nx!==S.px||ny!==S.py))||(k(nx,ny) in prev))continue;
       prev[k(nx,ny)]=[x,y];q.push([nx,ny]);
       if(nx===S.px&&ny===S.py){found=true;break}
     }
@@ -120,9 +120,10 @@ function estep(){
   if(!found)return;
   let cur=[S.px,S.py],p=prev[k(cur[0],cur[1])];
   while(prev[k(p[0],p[1])]){cur=p;p=prev[k(p[0],p[1])]}
-  S.ex=cur[0];S.ey=cur[1];
-  if(S.ex===S.px&&S.ey===S.py)caught();
+  ghost.x=cur[0];ghost.y=cur[1];
+  if(ghost.x===S.px&&ghost.y===S.py)caught();
 }
+function estep(){for(const ghost of S.ghosts)moveGhost(ghost)}
 function step(){
   if(S.mode!=='play'||!held.length)return;
   const [dx,dy]=held[held.length-1],nx=S.px+dx,ny=S.py+dy;
@@ -139,7 +140,7 @@ function step(){
     beep(150,.15,'square');return;
   }
   S.px=nx;S.py=ny;S.wf++;
-  if(S.px===S.ex&&S.py===S.ey){caught();return}
+  if(S.ghosts.some(ghost=>S.px===ghost.x&&S.py===ghost.y)){caught();return}
   if(c>='1'&&c<='9'){S.keys++;S.grid[ny][nx]='.';beep(988,.08);beep(1318,.12,'square',.05,.08)}
   hud();
 }
@@ -168,7 +169,9 @@ function draw(){
     }
   }
   const gy=Math.sin(now/220)*3;
-  g.globalAlpha=.92;spr(fl?SP.gB:SP.gA,S.ex*T,S.ey*T-4+gy,S.px<S.ex);g.globalAlpha=1;
+  g.globalAlpha=.92;
+  S.ghosts.forEach(ghost=>spr(fl?SP.gB:SP.gA,ghost.x*T,ghost.y*T-4+gy,S.px<ghost.x));
+  g.globalAlpha=1;
   spr(S.wf%2?SP.hB:SP.hA,S.px*T,S.py*T-2,S.face<0);
 }
 function tick(){
